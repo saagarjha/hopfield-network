@@ -1,2 +1,3 @@
-# hopfield-network
-Toy implementation of a Hopfield network
+# Hopfield Network
+
+Toy implementation of a Hopfield network that operates on ASCII "images".
