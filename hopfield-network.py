@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from functools import reduce
+from typing import List
 from pathlib import Path
 import sys
 
@@ -25,18 +26,18 @@ padded with a "white" background. Output will use a space (' ') to represent
 	sys.exit(1)
 
 
-def clean_images(ascii_images):
+def clean_images(ascii_images: List[str]) -> List[List[List[bool]]]:
 	width = max(map(len, reduce(list.__add__, ascii_images)))  # where's my flatmap, sigh
 	height = max(map(len, ascii_images))
 	return [[[not character.isspace() for character in row.ljust(width)] for row in image] +
          [[False] * width for i in range(height - len(image))] for image in ascii_images]
 
 
-def train(training_files):
+def train(training_files: [str]):
 	images = clean_images([Path(file).read_text().split("\n") for file in training_files])
 
 
-def read_model():
+def read_model() -> [[float]]:
 	model_size = int(input())
 	weights = [([0] * model_size) for i in range(model_size)]
 	for neuron1 in range(0, model_size):
@@ -45,7 +46,7 @@ def read_model():
 	return weights
 
 
-def match(image_file):
+def match(image_file: str):
 	model = read_model()
 
 
