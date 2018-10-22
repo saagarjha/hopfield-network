@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-from functools import reduce
-from typing import List
+from typing import List, Iterable
 from pathlib import Path
+import itertools
 import sys
 
 
@@ -26,18 +26,25 @@ padded with a "white" background. Output will use a space (' ') to represent
     sys.exit(1)
 
 
-def clean_images(ascii_images: List[str]) -> List[List[List[bool]]]:
-    width = max(map(len, reduce(list.__add__, ascii_images)))  # where's my flatmap, sigh
+def clean_images(ascii_images: List[List[str]]) -> Iterable[List[List[bool]]]:
+    width = max(map(len, itertools.chain(ascii_images)))
     height = max(map(len, ascii_images))
-    return [[[not character.isspace() for character in row.ljust(width)] for row in image] +
-         [[False] * width for i in range(height - len(image))] for image in ascii_images]
+    for image in ascii_images:
+        nonblank_rows = [[not char.isspace() for char in row.ljust(width)] for row in image]
+        blank_rows = [list(itertools.repeat(False, width)) for _ in range(height - len(image))]
+        yield nonblank_rows + blank_rows
 
 
-def train(training_files: [str]):
+def image_to_text(image: List[List[bool]]) -> str:
+    return "\n".join("".join(
+        map(lambda b: "X" if b else " ", row)) for row in image)
+
+
+def train(training_files: List[str]):
     images = clean_images([Path(file).read_text().split("\n") for file in training_files])
 
 
-def read_model() -> [[float]]:
+def read_model() -> List[List[float]]:
     model_size = int(input())
     weights = [([0] * model_size) for i in range(model_size)]
     for neuron1 in range(0, model_size):
