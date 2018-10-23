@@ -36,7 +36,7 @@ def clean_image(image: List[str], width: int, height: int) -> List[List[bool]]:
 
 def clean_images(ascii_images: List[List[str]]) -> Tuple[List[List[List[bool]]], int, int]:
     """Returns the cleaned images, along with the width and height of each image"""
-    width = max(map(len, itertools.chain(ascii_images)))
+    width = max(map(len, itertools.chain.from_iterable(ascii_images)))
     height = max(map(len, ascii_images))
     return [clean_image(image, width, height) for image in ascii_images], width, height
 
@@ -48,9 +48,8 @@ def image_to_text(image: List[List[bool]]) -> str:
 
 
 def image_to_data(image: List[List[bool]]) -> Iterable[int]:
-    for row in range(0, len(image)):
-        for col in range(0, len(image)):
-            value = image[row][col]
+    for row in image:
+        for value in row:
             yield 1 if value else -1
 
 
