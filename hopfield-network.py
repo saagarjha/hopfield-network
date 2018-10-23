@@ -53,6 +53,11 @@ def image_to_data(image: List[List[bool]]) -> Iterable[int]:
             yield 1 if value else -1
 
 
+def data_to_image(data: List[int], width: int, height: int) -> List[List[bool]]:
+    return [[cell == 1 for cell in data[y * width:(y + 1) * width]] for y in
+            range(0, height)]
+
+
 def train(images: List[List[List[bool]]]) -> List[List[int]]:
     assert(images)
     image_height = len(images[0])
@@ -102,16 +107,16 @@ def match(image_file: str, training_files: List[str]):
     MAX_ITER = 10
     cur_iter = 0
     while cur_iter < MAX_ITER:
+        print("State", cur_iter)
+        print(image_to_text(data_to_image(state, width, height)))
         cur_iter += 1
         changed = update_state(weights, state)
         if not changed:
             break
 
-    final_image = [[cell == 1 for cell in state[y * width:(y + 1) * width]]
-                   for y in range(0, height)]
     print("{} iterations".format(cur_iter))
     print("Final state:")
-    print(image_to_text(final_image))
+    print(image_to_text(data_to_image(state, width, height)))
 
 if len(sys.argv) <= 1:
     invalid_usage()
