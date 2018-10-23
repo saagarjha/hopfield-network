@@ -85,7 +85,7 @@ def update_state(weights: List[List[int]], state: List[int]) -> bool:
         activation = activation_rule(weights, state, i)
         oldstate = state[i]
         state[i] = 1 if activation >= 0 else -1
-        if state[i] == oldstate:
+        if state[i] != oldstate:
             change_count += 1
     return change_count > 0
 
