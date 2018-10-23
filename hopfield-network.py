@@ -4,26 +4,8 @@ from typing import List, Iterable, Tuple
 from pathlib import Path
 import itertools
 import sys
+import argparse
 
-
-def invalid_usage():
-    print("""Usage:
-
-hopsfield-network.py train <training-files...>
-    Train the Hopsfield network on the specified files, which are expected to be
-    ASCII "images". The generated model is printed to standard output.
-
-hopsfield-network.py match <image-file> <training-files...>
-    Find the best match, as determined from the model taken from standard input,
-    for the specified file (an ASCII "image"). The match is printed to standard
-    output.
-
-Note: Images are "black-and-white" in the sense that whitespace (other than
-newlines, which indicate dimensions) is interpreted as "white" and any other
-character is considered to be "black". Nonrectangular "ragged" images will be
-padded with a "white" background. Output will use a space (' ') to represent
-"white" and an 'X' to represent "black.""", file=sys.stderr)
-    sys.exit(1)
 
 def clean_image(image: List[str], width: int, height: int) -> List[List[bool]]:
     # Strip trailing blank lines
@@ -118,13 +100,41 @@ def match(image_file: str, training_files: List[str]):
     print("Final state:")
     print(image_to_text(data_to_image(state, width, height)))
 
-if len(sys.argv) <= 1:
-    invalid_usage()
-if sys.argv[1] == "train":
-    all_file_contents = [Path(file).read_text().split("\n") for file in sys.argv[2:]]
-    images, _, _ = clean_images(all_file_contents)
-    train(images)
-elif sys.argv[1] == "match":
-    match(sys.argv[2], sys.argv[3:])
-else:
-    invalid_usage()
+
+def main(args: List[str]):
+    cmd_parser = argparse.ArgumentParser(description="""
+        Implementation of a hopfield network.
+
+        Note: Images are "black-and-white" in the sense that whitespace (other than
+        newlines, which indicate dimensions) is interpreted as "white" and any other
+        character is considered to be "black". Nonrectangular "ragged" images will be
+        padded with a "white" background. Output will use a space (' ') to represent
+        "white" and an 'X' to represent "black.
+        """)
+    subparsers = cmd_parser.add_subparsers()
+
+    train_parser = subparsers.add_parser("train", help= """Train the
+        Hopsfield network on the specified files, which are expected to be ASCII
+        "images". The generated model is printed to standard output.""")
+    train_parser.add_argument("training_files", nargs="+")
+
+    match_parser = subparsers.add_parser("match", help="""
+        Find the best match, as determined from the model taken from standard input,
+        for the specified file (an ASCII "image"). The match is printed to standard
+        output.""")
+    match_parser.add_argument("test_file")
+    match_parser.add_argument("training_files", nargs="+")
+
+    result = cmd_parser.parse_args()
+
+    if hasattr(result, "test_file"):
+        # Match
+        match(result.test_file, result.training_files)
+    else:
+        all_file_contents = [Path(f).read_text().split("\n") for f in result.training_files]
+        images, _, _ = clean_images(all_file_contents)
+        train(images)
+
+
+if __name__ == "__main__":
+    main(sys.argv)
