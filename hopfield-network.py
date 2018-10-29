@@ -7,12 +7,15 @@ import sys
 import argparse
 
 
+def strip_empty(image: List[str]) -> List[str]:
+    return list(itertools.dropwhile(lambda s: not s, image[::-1]))[::-1]
+
+
 def clean_image(image: List[str], width: int, height: int) -> List[List[bool]]:
-    # Strip trailing blank lines
-    image = list(itertools.dropwhile(lambda s: not s, image[::-1]))[::-1]
+    image = strip_empty(image)
     assert(len(image) <= height)
     nonblank_rows = [[not char.isspace() for char in row.ljust(width)] for row in image]
-    blank_rows = [list(itertools.repeat(False, width)) for _ in range(height - len(image))]
+    blank_rows = [[False] * width for _ in range(height - len(image))]
     return nonblank_rows + blank_rows
 
 
@@ -45,7 +48,6 @@ def train(images: List[List[List[bool]]]) -> List[List[int]]:
     image_height = len(images[0])
     image_width = len(images[0][0])
     neuron_count = image_width * image_height
-    print("Image size is {} x {}".format(image_width, image_height))
     weights = [list(itertools.repeat(0, neuron_count))
                for _ in range(0, neuron_count)]
     img_nums = list(map(lambda img: list(image_to_data(img)), images))
@@ -77,10 +79,10 @@ def update_state(weights: List[List[int]], state: List[int]) -> bool:
     return change_count > 0
 
 
-def match(image_file: str, training_files: List[str]):
-    all_file_contents = [Path(file).read_text().split("\n") for file in training_files]
-    images, width, height = clean_images(all_file_contents)
-    weights = train(images)
+def match(image_file: str, model_file: str):
+    model = model_file.read().split("\n")
+    (width, height) = map(int, model[0].split())
+    weights = strip_empty([list(map(int, row.split())) for row in model[1:]])
     image_data = clean_image(Path(image_file).read_text().split("\n"), width, height)
     assert(len(image_data) == height)
     assert(len(image_data[0]) == width)
@@ -109,11 +111,11 @@ def main(args: List[str]):
         newlines, which indicate dimensions) is interpreted as "white" and any other
         character is considered to be "black". Nonrectangular "ragged" images will be
         padded with a "white" background. Output will use a space (' ') to represent
-        "white" and an 'X' to represent "black.
+        "white" and an 'X' to represent "black".
         """)
-    subparsers = cmd_parser.add_subparsers()
+    subparsers = cmd_parser.add_subparsers(dest="command")
 
-    train_parser = subparsers.add_parser("train", help= """Train the
+    train_parser = subparsers.add_parser("train", help="""Train the
         Hopsfield network on the specified files, which are expected to be ASCII
         "images". The generated model is printed to standard output.""")
     train_parser.add_argument("training_files", nargs="+")
@@ -123,17 +125,18 @@ def main(args: List[str]):
         for the specified file (an ASCII "image"). The match is printed to standard
         output.""")
     match_parser.add_argument("test_file")
-    match_parser.add_argument("training_files", nargs="+")
+    match_parser.add_argument("model_file", nargs="?", type=argparse.FileType("r"), default=sys.stdin)
 
     result = cmd_parser.parse_args()
 
-    if hasattr(result, "test_file"):
-        # Match
-        match(result.test_file, result.training_files)
-    else:
+    if result.command == "train":
         all_file_contents = [Path(f).read_text().split("\n") for f in result.training_files]
-        images, _, _ = clean_images(all_file_contents)
-        train(images)
+        images, width, height = clean_images(all_file_contents)
+        model = train(images)
+        print("{} {}".format(width, height))
+        print("\n".join(" ".join(map(str, row)) for row in model))
+    elif result.command == "match":
+        match(result.test_file, result.model_file)
 
 
 if __name__ == "__main__":
