@@ -1,56 +1,52 @@
 #!/usr/bin/env python3
 
-from typing import List, Iterable, Tuple
-from pathlib import Path
-import itertools
-import sys
 import argparse
+import itertools
+from pathlib import Path
+import re
+import sys
+from typing import List, Iterable
 
 
-def strip_empty(image: List[str]) -> List[str]:
-    return list(itertools.dropwhile(lambda s: not s, image[::-1]))[::-1]
+class Image:
+    def __init__(self, pbm: str):
+        pbm = re.sub(r"#\n", "", pbm).split()
+        assert(pbm[0] == "P1")
+        self.width = int(pbm[1])
+        self.height = int(pbm[2])
+        pbm = pbm[3:]
+        self.raster = [[bool(int(pixel)) for pixel in pbm[row:row + self.width]] for row in range(0, len(pbm), self.width)]
+
+    def resize(self, width: int, height: int):
+        assert(self.width <= width and self.height <= height)
+        self.raster = ([[False] * width for _ in range((height - self.height) // 2)]) + \
+            [[False] * ((width - self.width) // 2) + row + [False] * -((self.width - width) // 2) for row in self.raster] + \
+            ([[False] * width for _ in range(-(self.height - height) // 2)])
+        self.width = width
+        self.height = height
+
+    @property
+    def data(self) -> Iterable[int]:
+        data = []
+        for row in self.raster:
+            for value in row:
+                data.append(1 if value else -1)
+        return data
+
+    def data_to_pbm(data: List[int], width: int, height: int) -> str:
+        pbm = "P1\n{} {}\n".format(width, height) + \
+            "\n".join([" ".join(["1" if pixel == 1 else "0" for pixel in data[row:row + width]]) for row in range(0, len(data), width)])
+        return pbm
 
 
-def clean_image(image: List[str], width: int, height: int) -> List[List[bool]]:
-    image = strip_empty(image)
-    assert(len(image) <= height)
-    nonblank_rows = [[not char.isspace() for char in row.ljust(width)] for row in image]
-    blank_rows = [[False] * width for _ in range(height - len(image))]
-    return nonblank_rows + blank_rows
-
-
-def clean_images(ascii_images: List[List[str]]) -> Tuple[List[List[List[bool]]], int, int]:
-    """Returns the cleaned images, along with the width and height of each image"""
-    width = max(map(len, itertools.chain.from_iterable(ascii_images)))
-    height = max(map(len, ascii_images))
-    return [clean_image(image, width, height) for image in ascii_images], width, height
-
-
-def image_to_text(image: List[List[bool]]) -> str:
-    """Converts image data to a string"""
-    return "\n".join("".join(
-        map(lambda b: "X" if b else " ", row)) for row in image)
-
-
-def image_to_data(image: List[List[bool]]) -> Iterable[int]:
-    for row in image:
-        for value in row:
-            yield 1 if value else -1
-
-
-def data_to_image(data: List[int], width: int, height: int) -> List[List[bool]]:
-    return [[cell == 1 for cell in data[y * width:(y + 1) * width]] for y in
-            range(0, height)]
-
-
-def train(images: List[List[List[bool]]]) -> List[List[int]]:
+def train(images: List[Image]) -> List[List[int]]:
     assert(images)
-    image_height = len(images[0])
-    image_width = len(images[0][0])
+    image_height = images[0].height
+    image_width = images[0].width
     neuron_count = image_width * image_height
     weights = [list(itertools.repeat(0, neuron_count))
                for _ in range(0, neuron_count)]
-    img_nums = list(map(lambda img: list(image_to_data(img)), images))
+    img_nums = [list(image.data) for image in images]
     for i in range(0, neuron_count):
         for j in range(i + 1, neuron_count):
             weights[i][j] = weights[j][i] = (
@@ -80,60 +76,52 @@ def update_state(weights: List[List[int]], state: List[int]) -> bool:
 
 
 def match(image_file: str, model_file: str):
+    image = Image(Path(image_file).read_text())
     model = model_file.read().split("\n")
-    (width, height) = map(int, model[0].split())
-    weights = strip_empty([list(map(int, row.split())) for row in model[1:]])
-    image_data = clean_image(Path(image_file).read_text().split("\n"), width, height)
-    assert(len(image_data) == height)
-    assert(len(image_data[0]) == width)
+    weights = [list(map(int, row.split())) for row in model][:image.width * image.height]
 
-    state = list(image_to_data(image_data))
+    state = image.data
     MAX_ITER = 10
-    cur_iter = 0
-    while cur_iter < MAX_ITER:
-        print("State", cur_iter)
-        print(image_to_text(data_to_image(state, width, height)))
+    for cur_iter in range(MAX_ITER):
+        print("State", cur_iter, file=sys.stderr)
+        print(Image.data_to_pbm(state, image.width, image.height), file=sys.stderr)
         cur_iter += 1
         changed = update_state(weights, state)
         if not changed:
             break
 
-    print("{} iterations".format(cur_iter))
-    print("Final state:")
-    print(image_to_text(data_to_image(state, width, height)))
+    print("{} iterations".format(cur_iter), file=sys.stderr)
+    print(Image.data_to_pbm(state, image.width, image.height))
 
 
 def main(args: List[str]):
     cmd_parser = argparse.ArgumentParser(description="""
-        Implementation of a hopfield network.
-
-        Note: Images are "black-and-white" in the sense that whitespace (other than
-        newlines, which indicate dimensions) is interpreted as "white" and any other
-        character is considered to be "black". Nonrectangular "ragged" images will be
-        padded with a "white" background. Output will use a space (' ') to represent
-        "white" and an 'X' to represent "black".
+        Implementation of a Hopfield network.
         """)
     subparsers = cmd_parser.add_subparsers(dest="command")
 
     train_parser = subparsers.add_parser("train", help="""Train the
-        Hopsfield network on the specified files, which are expected to be ASCII
-        "images". The generated model is printed to standard output.""")
+        Hopsfield network on the specified files, which are expected to be plain
+        PBM files. The generated model is printed to standard output.""")
     train_parser.add_argument("training_files", nargs="+")
 
     match_parser = subparsers.add_parser("match", help="""
-        Find the best match, as determined from the model taken from standard input,
-        for the specified file (an ASCII "image"). The match is printed to standard
-        output.""")
+        Find the best match, as determined from the model taken from standard
+        input, for the specified file (a plain PBM file). The match is printed
+        to standard output.""")
     match_parser.add_argument("test_file")
     match_parser.add_argument("model_file", nargs="?", type=argparse.FileType("r"), default=sys.stdin)
 
     result = cmd_parser.parse_args()
 
     if result.command == "train":
-        all_file_contents = [Path(f).read_text().split("\n") for f in result.training_files]
-        images, width, height = clean_images(all_file_contents)
+        images = [Image(Path(f).read_text()) for f in result.training_files]
+        pixels = [image.raster for image in images]
+        width = max(map(len, itertools.chain(*pixels)))
+        height = max(map(len, pixels))
+        for image in images:
+            image.resize(width, height)
         model = train(images)
-        print("{} {}".format(width, height))
         print("\n".join(" ".join(map(str, row)) for row in model))
     elif result.command == "match":
         match(result.test_file, result.model_file)
