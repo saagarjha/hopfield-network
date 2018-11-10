@@ -26,6 +26,7 @@ class Image:
         self.raster = top_pad + [left_pad + row + right_pad for row in self.raster] + bottom_pad
         self.width = width
         self.height = height
+        assert(width * height == sum(map(len, self.raster)))
 
     @property
     def data(self) -> Iterable[int]:
@@ -81,20 +82,24 @@ def update_state(weights: List[List[int]], state: List[int]) -> bool:
 def match(image_file: str, model_file: str):
     image = Image(Path(image_file).read_text())
     model = model_file.read().split("\n")
-    weights = [list(map(int, row.split())) for row in model][:image.width * image.height]
+    (width, height) = map(int, model[0].split())
+    model = model[1:]
+    weights = [list(map(int, row.split())) for row in model][:width * height]
+    assert(len(weights) == width * height)
+    image.resize(width, height)
 
     state = image.data
     MAX_ITER = 10
     for cur_iter in range(MAX_ITER):
         print("State", cur_iter, file=sys.stderr)
-        print(Image.data_to_pbm(state, image.width, image.height), file=sys.stderr)
+        print(Image.data_to_pbm(state, width, height), file=sys.stderr)
         cur_iter += 1
         changed = update_state(weights, state)
         if not changed:
             break
 
     print("{} iterations".format(cur_iter), file=sys.stderr)
-    print(Image.data_to_pbm(state, image.width, image.height))
+    print(Image.data_to_pbm(state, width, height))
 
 
 def main(args: List[str]):
@@ -125,6 +130,7 @@ def main(args: List[str]):
         for image in images:
             image.resize(width, height)
         model = train(images)
+        print("{} {}".format(width, height))
         print("\n".join(" ".join(map(str, row)) for row in model))
     elif result.command == "match":
         match(result.test_file, result.model_file)
