@@ -21,7 +21,7 @@ class Image:
         assert(self.width <= width and self.height <= height)
         self.raster = ([[False] * width for _ in range((height - self.height) // 2)]) + \
             [[False] * ((width - self.width) // 2) + row + [False] * -((self.width - width) // 2) for row in self.raster] + \
-            ([[False] * width for _ in range(-(self.height - height) // 2)])
+            ([[False] * width for _ in range(-((self.height - height) // 2))])
         self.width = width
         self.height = height
 
