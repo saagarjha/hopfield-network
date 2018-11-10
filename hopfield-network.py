@@ -19,9 +19,11 @@ class Image:
 
     def resize(self, width: int, height: int):
         assert(self.width <= width and self.height <= height)
-        self.raster = ([[False] * width for _ in range((height - self.height) // 2)]) + \
-            [[False] * ((width - self.width) // 2) + row + [False] * -((self.width - width) // 2) for row in self.raster] + \
-            ([[False] * width for _ in range(-((self.height - height) // 2))])
+        top_pad = [[False] * width for _ in range((height - self.height) // 2)]
+        bottom_pad = [[False] * width for _ in range(-((self.height - height) // 2))]
+        left_pad = [False] * ((width - self.width) // 2)
+        right_pad = [False] * -((self.width - width) // 2)
+        self.raster = top_pad + [left_pad + row + right_pad for row in self.raster] + bottom_pad
         self.width = width
         self.height = height
 
