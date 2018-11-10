@@ -104,6 +104,7 @@ def match(image_file: str, model_file: str):
 
     print("{} iterations".format(cur_iter), file=sys.stderr)
     print(Image.data_to_pbm(state, image.width, image.height))
+    return state, image.width, image.height
 
 
 def main(args: List[str]):
@@ -123,6 +124,9 @@ def main(args: List[str]):
         to standard output.""")
     match_parser.add_argument("test_file")
     match_parser.add_argument("model_file", nargs="?", type=argparse.FileType("r"), default=sys.stdin)
+    match_parser.add_argument("-o", nargs="?", dest="output_file",
+                              help="Outputs the final state to the given file",
+                              type=argparse.FileType("w"))
 
     result = cmd_parser.parse_args()
 
@@ -136,7 +140,9 @@ def main(args: List[str]):
         model = train(images)
         print("\n".join(" ".join(map(str, row)) for row in model))
     elif result.command == "match":
-        match(result.test_file, result.model_file)
+        final_state, width, height = match(result.test_file, result.model_file)
+        if result.output_file is not None:
+            result.output_file.write(Image.data_to_pbm(final_state, width, height))
 
 
 if __name__ == "__main__":
