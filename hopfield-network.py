@@ -9,30 +9,43 @@ from typing import List, Iterable
 
 
 class Image:
-    def __init__(self, pbm: str):
-        pbm = re.sub(r"#\n", "", pbm).split()
+    def __init__(self, raw_pbm: str):
+        pbm = re.sub(r"#\n", "", raw_pbm).split()
         assert(pbm[0] == "P1")
         self.width = int(pbm[1])
         self.height = int(pbm[2])
         pbm = pbm[3:]
-        self.raster = [[bool(int(pixel)) for pixel in pbm[row:row + self.width]] for row in range(0, len(pbm), self.width)]
+        assert(len(pbm) == self.width * self.height)
+        # See the grouper example from
+        # https://docs.python.org/3/library/itertools.html
+        pixel_iter = [iter(pbm)] * self.width
+        self.raster = [[pix == "1" for pix in row]
+                       for row in itertools.zip_longest(*pixel_iter)]
 
     def resize(self, width: int, height: int):
-        assert(self.width <= width and self.height <= height)
-        self.raster = ([[False] * width for _ in range((height - self.height) // 2)]) + \
-            [[False] * ((width - self.width) // 2) + row + [False] * -((self.width - width) // 2) for row in self.raster] + \
-            ([[False] * width for _ in range(-(self.height - height) // 2)])
+        assert(1 <= self.width <= width and 1 <= self.height <= height)
+        hpad_len = (width - self.width) // 2
+        vpad_len = (height - self.height) // 2
+        # We need to be careful to insert an extra row/col if the delta is odd
+        vpad = [[False] * width] * vpad_len
+        vpad_bottom = [row.copy() for row in vpad] + (
+            [] if (height - self.height) % 2 == 0 else [[False] * width])
+        hpad = [False] * hpad_len
+        hpad_right = hpad + ([] if (width - self.width) % 2 == 0 else [False])
+        for i, row in enumerate(self.raster):
+            self.raster[i] = list(itertools.chain(hpad, row, hpad_right))
+        self.raster = vpad + self.raster + vpad_bottom
         self.width = width
         self.height = height
+        assert(sum(map(len, self.raster)) == width * height)
 
     @property
     def data(self) -> Iterable[int]:
-        data = []
         for row in self.raster:
             for value in row:
-                data.append(1 if value else -1)
-        return data
+                yield 1 if value else -1
 
+    @staticmethod
     def data_to_pbm(data: List[int], width: int, height: int) -> str:
         pbm = "P1\n{} {}\n".format(width, height) + \
             "\n".join([" ".join(["1" if pixel == 1 else "0" for pixel in data[row:row + width]]) for row in range(0, len(data), width)])
@@ -79,8 +92,7 @@ def match(image_file: str, model_file: str):
     image = Image(Path(image_file).read_text())
     model = model_file.read().split("\n")
     weights = [list(map(int, row.split())) for row in model][:image.width * image.height]
-
-    state = image.data
+    state = list(image.data)
     MAX_ITER = 10
     for cur_iter in range(MAX_ITER):
         print("State", cur_iter, file=sys.stderr)
